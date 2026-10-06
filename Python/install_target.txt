@@ -1,4 +1,7 @@
-# Target .uproject for run_install_editor.py (first non-comment line wins).
+# Target for run_install_editor.py — first non-# line wins.
+# Put either a NUMBER from the auto-scan list or a full path, e.g.:
+#   2
+#   D:\MyProject\MyProject.uproject
+# Extra scan roots (one per line):
+#   scan: D:\Work\Unreal
 # Close the target project before installing!
-# Example:
-# D:\MyProject\MyProject.uproject

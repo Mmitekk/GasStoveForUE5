@@ -68,10 +68,12 @@ def copy_with_backup(src, dst):
     return True
 
 
-def install_from(source_root, target):
+def install_from(source_root, target, update_uproject=True):
     """Install the pack from source_root (git clone or UE52VFX project) into
     target .uproject. Returns True. Raises InstallError on problems.
-    Import-safe: no input()/sys.exit() inside (editor-friendly)."""
+    Import-safe: no input()/sys.exit() inside (editor-friendly).
+    update_uproject=False leaves the target .uproject untouched (for installs
+    into the currently OPEN project — enable Niagara manually instead)."""
     if not target or not os.path.isfile(target):
         raise InstallError("target .uproject not found: %r" % target)
     if not target.lower().endswith(".uproject"):
@@ -144,13 +146,17 @@ def install_from(source_root, target):
     print("== Plugins ==")
     plugins = uproj.get("Plugins") or []
     if not any(p.get("Name") == "Niagara" for p in plugins):
-        plugins.append({"Name": "Niagara", "Enabled": True})
-        uproj["Plugins"] = plugins
-        shutil.copy2(target, target + ".bak")
-        with open(target, "w", encoding="utf-8") as f:
-            json.dump(uproj, f, indent="\t")
-            f.write("\n")
-        print("  added Niagara plugin entry (+.uproject.bak)")
+        if not update_uproject:
+            print("  OPEN PROJECT: enable Niagara manually (Edit -> Plugins -> Niagara),")
+            print("  then restart the editor. Skipping .uproject edit.")
+        else:
+            plugins.append({"Name": "Niagara", "Enabled": True})
+            uproj["Plugins"] = plugins
+            shutil.copy2(target, target + ".bak")
+            with open(target, "w", encoding="utf-8") as f:
+                json.dump(uproj, f, indent="\t")
+                f.write("\n")
+            print("  added Niagara plugin entry (+.uproject.bak)")
     else:
         print("  Niagara plugin entry present")
 

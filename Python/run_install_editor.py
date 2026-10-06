@@ -13,6 +13,12 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 import install_gas_burner as inst
+try:
+    # Editor caches python modules per session: force fresh code on re-runs.
+    import importlib
+    inst = importlib.reload(inst)
+except Exception:
+    pass
 
 # Where to look for UE projects (extra roots via "scan: <dir>" lines in config).
 SCAN_ROOTS = [r"H:\Unreal Projects", r"D:\Unreal Projects", r"D:\GitHub"]

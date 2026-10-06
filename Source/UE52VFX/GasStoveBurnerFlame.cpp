@@ -2,6 +2,7 @@
 
 #include "GasStoveBurnerFlame.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Engine/StaticMesh.h"
@@ -107,6 +108,43 @@ void AGasStoveBurnerFlame::BeginPlay()
 	}
 	RebuildRing();
 	ApplyLitState();
+	BindKnob();
+}
+
+void AGasStoveBurnerFlame::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (ControlKnob)
+	{
+		if (UPrimitiveComponent* Prim = Cast<UPrimitiveComponent>(ControlKnob->GetRootComponent()))
+		{
+			Prim->OnClicked.RemoveAll(this);
+		}
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void AGasStoveBurnerFlame::BindKnob()
+{
+	if (!ControlKnob || !bKnobClickToggles)
+	{
+		return;
+	}
+	if (UPrimitiveComponent* Prim = Cast<UPrimitiveComponent>(ControlKnob->GetRootComponent()))
+	{
+		// StaticMeshActors are clickable by default, but make sure.
+		Prim->SetClickable(true);
+		Prim->OnClicked.AddDynamic(this, &AGasStoveBurnerFlame::OnKnobClicked);
+	}
+}
+
+void AGasStoveBurnerFlame::OnKnobClicked(UPrimitiveComponent* TouchedComponent, FKey Button)
+{
+	ToggleLit();
+}
+
+void AGasStoveBurnerFlame::ToggleLit()
+{
+	SetLit(!bLit);
 }
 
 void AGasStoveBurnerFlame::SetLit(bool bNewLit)

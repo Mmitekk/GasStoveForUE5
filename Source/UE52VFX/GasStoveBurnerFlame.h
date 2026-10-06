@@ -81,6 +81,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Gas Flame")
 	void SetLit(bool bNewLit);
 
+	/** Flip the valve: off -> on, on -> off. */
+	UFUNCTION(BlueprintCallable, Category = "Gas Flame")
+	void ToggleLit();
+
+	/** Knob actor (e.g. the stove's PlaneCutOtherPart_* mesh) that controls this burner. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame")
+	TObjectPtr<AActor> ControlKnob;
+
+	/** Clicking ControlKnob in game toggles the flame. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (EditCondition = "ControlKnob"))
+	bool bKnobClickToggles = true;
+
 	/** Gas valve 0 (closed) .. 1 (full). Auto-hides flame near zero. */
 	UFUNCTION(BlueprintCallable, Category = "Gas Flame")
 	void SetGasLevel(float Level01);
@@ -92,10 +104,15 @@ public:
 protected:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaSeconds) override;
 
 	void RebuildRing();
 	void ApplyLitState();
+	void BindKnob();
+
+	UFUNCTION()
+	void OnKnobClicked(UPrimitiveComponent* TouchedComponent, FKey Button);
 
 	UPROPERTY(VisibleAnywhere, Category = "Gas Flame")
 	TObjectPtr<USceneComponent> Root;

@@ -1,5 +1,7 @@
 # GasStoveUE5 — Blue Gas Burner Flame for Unreal Engine 5
 
+![Gas burner flame](Docs/screenshot.jpg)
+
 [🇷🇺 Русский](#-русский) · [🇬🇧 English](#-english)
 
 ---

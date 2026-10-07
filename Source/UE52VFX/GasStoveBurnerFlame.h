@@ -106,11 +106,15 @@ public:
 
 	/** Ignition one-shot volume. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio", meta = (ClampMin = "0", ClampMax = "2"))
-	float IgnitionVolume = 1.0f;
+	float IgnitionVolume = 0.3f;
 
 	/** Valve-off click volume. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio", meta = (ClampMin = "0", ClampMax = "2"))
 	float OffVolume = 1.0f;
+
+	/** Flame appears this many seconds after the ignition click (syncs with the whoosh). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio", meta = (ClampMin = "0", ClampMax = "5"))
+	float IgnitionDelay = 0.7f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio")
 	TObjectPtr<USoundBase> IgnitionSound;
@@ -168,6 +172,8 @@ protected:
 	void RebuildRing();
 	void ApplyLitState();
 	void BindKnob();
+	void ComputeKnobAxis();
+	void OnIgniteTimer();
 
 	UFUNCTION()
 	void OnKnobClicked(UPrimitiveComponent* TouchedComponent, FKey Button);
@@ -204,6 +210,12 @@ protected:
 	FQuat KnobBaseQuat = FQuat::Identity;
 	float KnobCurAngle = 0.0f;
 	float KnobTargetAngle = 0.0f;
+	/** Local shaft axis of the knob (auto-detected from the knob's world orientation). */
+	FVector KnobAxisLocal = FVector::YAxisVector;
+
+	/** Delayed-ignition state: flame visuals appear only after IgnitionDelay. */
+	bool bFlameVisual = false;
+	FTimerHandle IgniteTimerHandle;
 
 	float RunningTime = 0.0f;
 	bool bRingBuilt = false;

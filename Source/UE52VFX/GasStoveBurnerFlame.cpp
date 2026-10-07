@@ -178,6 +178,8 @@ void AGasStoveBurnerFlame::BeginPlay()
 	{
 		SetActorTickEnabled(false);
 	}
+	// Pre-lit burners (bLit saved true) show visuals immediately.
+	bFlameVisual = bLit;
 	RebuildRing();
 	ApplyLitState();
 	BindKnob();
@@ -244,6 +246,59 @@ void AGasStoveBurnerFlame::BindKnob()
 	// Remember rest pose so the knob can turn and return.
 	KnobPrim = KnobMesh;
 	KnobBaseQuat = KnobMesh->GetRelativeRotation().Quaternion();
+	ComputeKnobAxis();
+}
+
+void AGasStoveBurnerFlame::ComputeKnobAxis()
+{
+	// The knob must TWIST around its own shaft. The shaft is the knob mesh's
+	// THINNEST dimension (a mushroom button is thin along its shaft) — world-aligned
+	// AABB tells which world direction that is; then map it to the local axis.
+	const FBoxSphereBounds& B = KnobMesh->Bounds;
+	FVector ThinWorld(1.0f, 0.0f, 0.0f);
+	float MinE = B.BoxExtent.X;
+	if (B.BoxExtent.Y < MinE)
+	{
+		MinE = B.BoxExtent.Y;
+		ThinWorld = FVector(0.0f, 1.0f, 0.0f);
+	}
+	if (B.BoxExtent.Z < MinE)
+	{
+		ThinWorld = FVector(0.0f, 0.0f, 1.0f);
+	}
+
+	// Map world-thin direction to the closest local axis.
+	float BestDot = -2.0f;
+	FVector BestAxis = FVector::YAxisVector;
+	const FVector Axes[3] = {
+		KnobMesh->GetComponentTransform().GetUnitAxis(EAxis::X),
+		KnobMesh->GetComponentTransform().GetUnitAxis(EAxis::Y),
+		KnobMesh->GetComponentTransform().GetUnitAxis(EAxis::Z) };
+	for (const FVector& A : Axes)
+	{
+		const float D = FMath::Abs(FVector::DotProduct(A, ThinWorld));
+		if (D > BestDot)
+		{
+			BestDot = D;
+			BestAxis = A;
+		}
+	}
+	KnobAxisLocal = BestAxis;
+}
+
+void AGasStoveBurnerFlame::OnIgniteTimer()
+{
+	if (!bLit)
+	{
+		return; // valve closed before ignition finished
+	}
+	bFlameVisual = true;
+	ApplyLitState();
+	if (BurnerAudio && CombustionSound)
+	{
+		BurnerAudio->SetSound(CombustionSound);
+		BurnerAudio->FadeIn(0.4f, CombustionVolume);
+	}
 }
 
 void AGasStoveBurnerFlame::OnKnobClicked(UPrimitiveComponent* TouchedComponent, FKey Button)
@@ -264,30 +319,30 @@ void AGasStoveBurnerFlame::SetLit(bool bNewLit)
 	KnobTargetAngle = bLit ? KnobTurnDeg : 0.0f;
 	// Tick drives flame flicker AND the knob turn-back animation.
 	SetActorTickEnabled(bLit || !FMath::IsNearlyEqual(KnobCurAngle, KnobTargetAngle, 0.01f));
-	ApplyLitState();
 
-	// Audio: ignition one-shot + looping combustion while lit.
-	if (BurnerAudio)
+	// Flame visuals come with a delay to match the ignition whoosh.
+	if (bLit && !bWasLit)
 	{
-		if (bLit && !bWasLit)
+		bFlameVisual = false;
+		ApplyLitState();
+		GetWorldTimerManager().SetTimer(IgniteTimerHandle, this,
+			&AGasStoveBurnerFlame::OnIgniteTimer, FMath::Max(0.01f, IgnitionDelay), false);
+		if (IgnitionSound)
 		{
-			if (IgnitionSound)
-			{
-				UGameplayStatics::PlaySoundAtLocation(this, IgnitionSound, GetActorLocation(), IgnitionVolume);
-			}
-			if (CombustionSound)
-			{
-				BurnerAudio->SetSound(CombustionSound);
-				BurnerAudio->SetVolumeMultiplier(CombustionVolume);
-				BurnerAudio->FadeIn(0.4f, CombustionVolume);
-			}
+			UGameplayStatics::PlaySoundAtLocation(this, IgnitionSound, GetActorLocation(), IgnitionVolume);
 		}
-		else if (!bLit && bWasLit)
+	}
+	else if (!bLit && bWasLit)
+	{
+		GetWorldTimerManager().ClearTimer(IgniteTimerHandle);
+		bFlameVisual = false;
+		ApplyLitState();
+		if (OffSound)
 		{
-			if (OffSound)
-			{
-				UGameplayStatics::PlaySoundAtLocation(this, OffSound, GetActorLocation(), OffVolume);
-			}
+			UGameplayStatics::PlaySoundAtLocation(this, OffSound, GetActorLocation(), OffVolume);
+		}
+		if (BurnerAudio)
+		{
 			BurnerAudio->FadeOut(0.3f, 0.0f);
 		}
 	}
@@ -306,7 +361,8 @@ void AGasStoveBurnerFlame::RebuildFlames()
 
 void AGasStoveBurnerFlame::ApplyLitState()
 {
-	const bool bShow = bLit;
+	// Editor preview follows bLit directly; in game visuals respect ignition delay.
+	const bool bShow = GetWorld() && GetWorld()->IsGameWorld() ? bFlameVisual : bLit;
 	FlameInstances->SetVisibility(bShow);
 	BaseGlow->SetVisibility(bShow);
 	BurnerLight->SetVisibility(bShow);
@@ -394,7 +450,7 @@ void AGasStoveBurnerFlame::Tick(float DeltaSeconds)
 		KnobPrim->SetRelativeRotation(KnobBaseQuat * FQuat(Axis, FMath::DegreesToRadians(KnobCurAngle)));
 	}
 
-	if (!bLit || !bRingBuilt)
+	if (!bFlameVisual || !bRingBuilt)
 	{
 		// Flame off and knob settled -> full sleep, zero cost.
 		if (!bLit && FMath::IsNearlyEqual(KnobCurAngle, KnobTargetAngle, 0.01f))

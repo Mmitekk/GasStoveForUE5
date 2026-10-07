@@ -174,6 +174,7 @@ protected:
 	void BindKnob();
 	void ComputeKnobAxis();
 	void OnIgniteTimer();
+	void ApplySpatialization(UAudioComponent* Audio);
 
 	UFUNCTION()
 	void OnKnobClicked(UPrimitiveComponent* TouchedComponent, FKey Button);
@@ -198,6 +199,10 @@ protected:
 	/** Looping combustion audio, plays while lit. */
 	UPROPERTY(VisibleAnywhere, Category = "Gas Flame")
 	TObjectPtr<UAudioComponent> BurnerAudio;
+
+	/** Ignition / valve-off one-shots (spatial, at the burner). */
+	UPROPERTY(VisibleAnywhere, Category = "Gas Flame")
+	TObjectPtr<UAudioComponent> ClickAudio;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> FlameMID;

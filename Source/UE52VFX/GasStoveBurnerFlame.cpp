@@ -74,6 +74,28 @@ AGasStoveBurnerFlame::AGasStoveBurnerFlame()
 	BurnerAudio->SetupAttachment(Root);
 	BurnerAudio->SetRelativeLocation(FVector(0.0f, 0.0f, 10.0f));
 	BurnerAudio->bAutoActivate = false;
+	BurnerAudio->bAllowSpatialization = true;
+
+	ClickAudio = CreateDefaultSubobject<UAudioComponent>(TEXT("ClickAudio"));
+	ClickAudio->SetupAttachment(Root);
+	ClickAudio->SetRelativeLocation(FVector(0.0f, 0.0f, 10.0f));
+	ClickAudio->bAutoActivate = false;
+	ClickAudio->bAllowSpatialization = true;
+}
+
+void AGasStoveBurnerFlame::ApplySpatialization(UAudioComponent* Audio)
+{
+	if (!Audio)
+	{
+		return;
+	}
+	// Default falloff is ~36 m — sounds like 2D across the whole map.
+	// Clamp it to the kitchen scale.
+	Audio->AttenuationOverrides.bAttenuate = true;
+	Audio->AttenuationOverrides.bSpatialize = true;
+	Audio->AttenuationOverrides.AttenuationShape = EAttenuationShape::Sphere;
+	Audio->AttenuationOverrides.AttenuationShapeExtents = FVector(20.0f);
+	Audio->AttenuationOverrides.FalloffDistance = 350.0f;
 }
 
 void AGasStoveBurnerFlame::OnConstruction(const FTransform& Transform)
@@ -187,6 +209,7 @@ void AGasStoveBurnerFlame::BeginPlay()
 	// A burner placed pre-lit starts its burn loop too.
 	if (bLit && CombustionSound && BurnerAudio)
 	{
+		ApplySpatialization(BurnerAudio);
 		BurnerAudio->SetSound(CombustionSound);
 		BurnerAudio->SetVolumeMultiplier(CombustionVolume);
 		BurnerAudio->Play();
@@ -252,8 +275,9 @@ void AGasStoveBurnerFlame::BindKnob()
 void AGasStoveBurnerFlame::ComputeKnobAxis()
 {
 	// The knob must TWIST around its own shaft. The shaft is the knob mesh's
-	// THINNEST dimension (a mushroom button is thin along its shaft) — world-aligned
-	// AABB tells which world direction that is; then map it to the local axis.
+	// THINNEST dimension (a mushroom button is thin along its shaft).
+	// World-aligned AABB gives the thinnest WORLD direction; map it to the
+	// component's LOCAL axis (relative rotation expects local-space axes!).
 	const FBoxSphereBounds& B = KnobMesh->Bounds;
 	FVector ThinWorld(1.0f, 0.0f, 0.0f);
 	float MinE = B.BoxExtent.X;
@@ -267,20 +291,24 @@ void AGasStoveBurnerFlame::ComputeKnobAxis()
 		ThinWorld = FVector(0.0f, 0.0f, 1.0f);
 	}
 
-	// Map world-thin direction to the closest local axis.
+	// LOCAL axes of the knob component (relative to its parent).
+	const FTransform RT = KnobMesh->GetRelativeTransform();
+	const FVector LocalAxes[3] = {
+		RT.GetUnitAxis(EAxis::X),
+		RT.GetUnitAxis(EAxis::Y),
+		RT.GetUnitAxis(EAxis::Z) };
+
 	float BestDot = -2.0f;
 	FVector BestAxis = FVector::YAxisVector;
-	const FVector Axes[3] = {
-		KnobMesh->GetComponentTransform().GetUnitAxis(EAxis::X),
-		KnobMesh->GetComponentTransform().GetUnitAxis(EAxis::Y),
-		KnobMesh->GetComponentTransform().GetUnitAxis(EAxis::Z) };
-	for (const FVector& A : Axes)
+	for (int32 i = 0; i < 3; ++i)
 	{
-		const float D = FMath::Abs(FVector::DotProduct(A, ThinWorld));
+		// world direction of this local axis:
+		const FVector WorldDir = KnobMesh->GetComponentTransform().GetUnitAxis(static_cast<EAxis::Type>(i + 0));
+		const float D = FMath::Abs(FVector::DotProduct(WorldDir, ThinWorld));
 		if (D > BestDot)
 		{
 			BestDot = D;
-			BestAxis = A;
+			BestAxis = LocalAxes[i];
 		}
 	}
 	KnobAxisLocal = BestAxis;
@@ -296,6 +324,7 @@ void AGasStoveBurnerFlame::OnIgniteTimer()
 	ApplyLitState();
 	if (BurnerAudio && CombustionSound)
 	{
+		ApplySpatialization(BurnerAudio);
 		BurnerAudio->SetSound(CombustionSound);
 		BurnerAudio->FadeIn(0.4f, CombustionVolume);
 	}
@@ -327,9 +356,11 @@ void AGasStoveBurnerFlame::SetLit(bool bNewLit)
 		ApplyLitState();
 		GetWorldTimerManager().SetTimer(IgniteTimerHandle, this,
 			&AGasStoveBurnerFlame::OnIgniteTimer, FMath::Max(0.01f, IgnitionDelay), false);
-		if (IgnitionSound)
+		if (IgnitionSound && ClickAudio)
 		{
-			UGameplayStatics::PlaySoundAtLocation(this, IgnitionSound, GetActorLocation(), IgnitionVolume);
+			ApplySpatialization(ClickAudio);
+			ClickAudio->SetSound(IgnitionSound);
+			ClickAudio->Play();
 		}
 	}
 	else if (!bLit && bWasLit)
@@ -337,9 +368,11 @@ void AGasStoveBurnerFlame::SetLit(bool bNewLit)
 		GetWorldTimerManager().ClearTimer(IgniteTimerHandle);
 		bFlameVisual = false;
 		ApplyLitState();
-		if (OffSound)
+		if (OffSound && ClickAudio)
 		{
-			UGameplayStatics::PlaySoundAtLocation(this, OffSound, GetActorLocation(), OffVolume);
+			ApplySpatialization(ClickAudio);
+			ClickAudio->SetSound(OffSound);
+			ClickAudio->Play();
 		}
 		if (BurnerAudio)
 		{

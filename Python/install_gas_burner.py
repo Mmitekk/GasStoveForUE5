@@ -31,6 +31,9 @@ SRC_API_MACRO = "UE52VFX_API"
 CONTENT_PAYLOAD = [
     "Content/VFX/GasStove/M_GasFlame.uasset",
     "Content/VFX/GasStove/M_GasGlow.uasset",
+    "Content/VFX/GasStove/Audio/S_GasIgnition.uasset",
+    "Content/VFX/GasStove/Audio/S_GasOff.uasset",
+    "Content/VFX/GasStove/Audio/S_GasCombustion.uasset",
     "Content/VFX/GasStove/Textures/T_GasFlame_Tongue.png",
     "Content/VFX/GasStove/Textures/T_GasFlame_Glow.png",
     "Content/VFX/GasStove/Textures/T_FlameNoise.png",

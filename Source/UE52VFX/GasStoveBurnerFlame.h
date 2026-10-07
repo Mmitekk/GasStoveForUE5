@@ -13,6 +13,18 @@ class UStaticMeshComponent;
 class UPointLightComponent;
 class UNiagaraComponent;
 class UMaterialInstanceDynamic;
+class UPrimitiveComponent;
+class USoundBase;
+class UAudioComponent;
+
+/** Local axis the knob mesh spins around. */
+UENUM(BlueprintType)
+enum class EKnobAxis : uint8
+{
+	X,
+	Y,
+	Z
+};
 
 UCLASS(Blueprintable, BlueprintType, meta = (DisplayName = "Gas Stove Burner Flame"))
 class UE52VFX_API AGasStoveBurnerFlame : public AActor
@@ -24,43 +36,43 @@ public:
 
 	/** Radius of the burner ring in cm (photo: tongues sit on a ~8-10cm circle). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (ClampMin = "2", ClampMax = "40"))
-	float BurnerRadius = 9.0f;
+	float BurnerRadius = 3.0f;
 
 	/** Number of flame tongues around the ring. Photo shows ~20-24. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (ClampMin = "8", ClampMax = "64"))
-	int32 FlameCount = 22;
+	int32 FlameCount = 20;
 
 	/** Height of one tongue in cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (ClampMin = "2", ClampMax = "30"))
-	float FlameHeight = 8.0f;
+	float FlameHeight = 6.0f;
 
 	/** Width of one tongue in cm. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (ClampMin = "1", ClampMax = "12"))
-	float FlameWidth = 5.0f;
+	float FlameWidth = 1.3f;
 
 	/** Outward lean of tongues in degrees (photo: flames lean slightly outward). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame")
-	float OutwardTiltDeg = 18.0f;
+	float OutwardTiltDeg = 33.0f;
 
 	/** Emissive boost passed to M_GasFlame parameter FlameIntensity. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (ClampMin = "0", ClampMax = "60"))
-	float FlameIntensity = 6.0f;
+	float FlameIntensity = 0.35f;
 
 	/** Flicker speed (Hz-ish scale). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame")
-	float FlickerSpeed = 13.0f;
+	float FlickerSpeed = 2.0f;
 
 	/** Relative height flicker 0..0.6. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (ClampMin = "0", ClampMax = "0.6"))
-	float FlickerAmount = 0.30f;
+	float FlickerAmount = 0.1f;
 
 	/** Sideways dance amplitude in cm (per-tongue phase, base stays glued). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (ClampMin = "0", ClampMax = "5"))
-	float SwayAmplitude = 0.8f;
+	float SwayAmplitude = 0.18f;
 
 	/** Sideways dance speed. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame")
-	float SwaySpeed = 9.0f;
+	float SwaySpeed = 30.0f;
 
 	/** Tilt oscillation in degrees around OutwardTiltDeg. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (ClampMin = "0", ClampMax = "15"))
@@ -68,7 +80,7 @@ public:
 
 	/** Base point-light brightness. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame")
-	float LightIntensity = 60.0f;
+	float LightIntensity = 0.6f;
 
 	/** Turn flame on/off (for gameplay: gas valve). Off by default: place, keep hidden, ignite via SetLit/SetGasLevel. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame")
@@ -76,7 +88,41 @@ public:
 
 	/** Gas knob 0..1: scales flame height, brightness and light live. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (ClampMin = "0", ClampMax = "1"))
-	float GasLevel = 1.0f;
+	float GasLevel = 0.25f;
+
+	UFUNCTION(BlueprintPure, Category = "Gas Flame")
+	bool IsLit() const { return bLit; }
+
+	/** E-interaction hint texts (project interaction system). Empty = engine defaults. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Interaction")
+	FText ActionTextOn;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Interaction")
+	FText ActionTextOff;
+
+	/** Burning loop volume (auto-loaded from /Game/VFX/GasStove/Audio if empty). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio", meta = (ClampMin = "0", ClampMax = "2"))
+	float CombustionVolume = 0.75f;
+
+	/** Ignition one-shot volume. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio", meta = (ClampMin = "0", ClampMax = "2"))
+	float IgnitionVolume = 1.0f;
+
+	/** Valve-off click volume. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio", meta = (ClampMin = "0", ClampMax = "2"))
+	float OffVolume = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio")
+	TObjectPtr<USoundBase> IgnitionSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio")
+	TObjectPtr<USoundBase> CombustionSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio")
+	TObjectPtr<USoundBase> OffSound;
+
+	const FText& GetActionTextOn() const { return ActionTextOn; }
+	const FText& GetActionTextOff() const { return ActionTextOff; }
 
 	UFUNCTION(BlueprintCallable, Category = "Gas Flame")
 	void SetLit(bool bNewLit);
@@ -85,13 +131,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Gas Flame")
 	void ToggleLit();
 
-	/** Knob actor (e.g. the stove's PlaneCutOtherPart_* mesh) that controls this burner. */
+	/** Knob mesh component (e.g. button mesh inside the stove BP) that controls this burner. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame")
-	TObjectPtr<AActor> ControlKnob;
+	TObjectPtr<UPrimitiveComponent> KnobMesh;
 
-	/** Clicking ControlKnob in game toggles the flame. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (EditCondition = "ControlKnob"))
+	/** Clicking KnobMesh in game toggles the flame. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (EditCondition = "KnobMesh"))
 	bool bKnobClickToggles = true;
+
+	/** How far the knob turns when lit (like a real stove). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (EditCondition = "ControlKnob", ClampMin = "0", ClampMax = "180"))
+	float KnobTurnDeg = 60.0f;
+
+	/** Knob turn animation speed (degrees per second). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (EditCondition = "ControlKnob", ClampMin = "1"))
+	float KnobTurnSpeed = 240.0f;
+
+	/** Local axis of the knob mesh it spins around. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame", meta = (EditCondition = "ControlKnob"))
+	EKnobAxis KnobAxis = EKnobAxis::Z;
 
 	/** Gas valve 0 (closed) .. 1 (full). Auto-hides flame near zero. */
 	UFUNCTION(BlueprintCallable, Category = "Gas Flame")
@@ -131,11 +189,21 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Gas Flame")
 	TObjectPtr<UNiagaraComponent> ExtraFX;
 
+	/** Looping combustion audio, plays while lit. */
+	UPROPERTY(VisibleAnywhere, Category = "Gas Flame")
+	TObjectPtr<UAudioComponent> BurnerAudio;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> FlameMID;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> GlowMID;
+
+	/** Knob runtime state (rotation turn-back animates even when flame is off). */
+	TWeakObjectPtr<UPrimitiveComponent> KnobPrim;
+	FQuat KnobBaseQuat = FQuat::Identity;
+	float KnobCurAngle = 0.0f;
+	float KnobTargetAngle = 0.0f;
 
 	float RunningTime = 0.0f;
 	bool bRingBuilt = false;

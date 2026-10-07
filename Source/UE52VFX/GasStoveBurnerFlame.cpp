@@ -9,6 +9,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Sound/SoundAttenuation.h"
 #include "Sound/SoundBase.h"
 #include "Components/PointLightComponent.h"
 #include "Engine/StaticMesh.h"
@@ -135,6 +136,18 @@ void AGasStoveBurnerFlame::OnConstruction(const FTransform& Transform)
 	if (!OffSound)
 	{
 		OffSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/VFX/GasStove/Audio/S_GasOff"));
+	}
+	// Spatial attenuation asset (created by Python/make_gas_attenuation.py).
+	if (USoundAttenuation* ATN = LoadObject<USoundAttenuation>(nullptr, TEXT("/Game/VFX/GasStove/ATN_GasStove")))
+	{
+		if (BurnerAudio)
+		{
+			BurnerAudio->AttenuationSettings = ATN;
+		}
+		if (ClickAudio)
+		{
+			ClickAudio->AttenuationSettings = ATN;
+		}
 	}
 
 	RebuildRing();
@@ -274,44 +287,8 @@ void AGasStoveBurnerFlame::BindKnob()
 
 void AGasStoveBurnerFlame::ComputeKnobAxis()
 {
-	// The knob must TWIST around its own shaft. The shaft is the knob mesh's
-	// THINNEST dimension (a mushroom button is thin along its shaft).
-	// World-aligned AABB gives the thinnest WORLD direction; map it to the
-	// component's LOCAL axis (relative rotation expects local-space axes!).
-	const FBoxSphereBounds& B = KnobMesh->Bounds;
-	FVector ThinWorld(1.0f, 0.0f, 0.0f);
-	float MinE = B.BoxExtent.X;
-	if (B.BoxExtent.Y < MinE)
-	{
-		MinE = B.BoxExtent.Y;
-		ThinWorld = FVector(0.0f, 1.0f, 0.0f);
-	}
-	if (B.BoxExtent.Z < MinE)
-	{
-		ThinWorld = FVector(0.0f, 0.0f, 1.0f);
-	}
-
-	// LOCAL axes of the knob component (relative to its parent).
-	const FTransform RT = KnobMesh->GetRelativeTransform();
-	const FVector LocalAxes[3] = {
-		RT.GetUnitAxis(EAxis::X),
-		RT.GetUnitAxis(EAxis::Y),
-		RT.GetUnitAxis(EAxis::Z) };
-
-	float BestDot = -2.0f;
-	FVector BestAxis = FVector::YAxisVector;
-	for (int32 i = 0; i < 3; ++i)
-	{
-		// world direction of this local axis:
-		const FVector WorldDir = KnobMesh->GetComponentTransform().GetUnitAxis(static_cast<EAxis::Type>(i + 0));
-		const float D = FMath::Abs(FVector::DotProduct(WorldDir, ThinWorld));
-		if (D > BestDot)
-		{
-			BestDot = D;
-			BestAxis = LocalAxes[i];
-		}
-	}
-	KnobAxisLocal = BestAxis;
+	// Twist around the knob's local Y shaft (matches this stove's button meshes).
+	KnobAxisLocal = FVector(0.0f, 1.0f, 0.0f);
 }
 
 void AGasStoveBurnerFlame::OnIgniteTimer()

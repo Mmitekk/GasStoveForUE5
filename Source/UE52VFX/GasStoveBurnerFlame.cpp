@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "GasStoveBurnerFlame.h"
 #include "AudioDevice.h"
@@ -82,6 +82,47 @@ AGasStoveBurnerFlame::AGasStoveBurnerFlame()
 	ClickAudio->SetRelativeLocation(FVector(0.0f, 0.0f, 10.0f));
 	ClickAudio->bAutoActivate = false;
 	ClickAudio->bAllowSpatialization = true;
+
+	// Hard asset references: the cooker only packages what C++/BPs reference.
+	// (Pure runtime LoadObject is invisible to the cooker — packaged builds
+	// would silently lose these assets.)
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> FlameMatFinder(
+		TEXT("/Game/VFX/GasStove/M_GasFlame"));
+	if (FlameMatFinder.Succeeded())
+	{
+		FlameMaterial = FlameMatFinder.Object;
+	}
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> GlowMatFinder(
+		TEXT("/Game/VFX/GasStove/M_GasGlow"));
+	if (GlowMatFinder.Succeeded())
+	{
+		GlowMaterial = GlowMatFinder.Object;
+	}
+	static ConstructorHelpers::FObjectFinder<USoundBase> IgnitionSndFinder(
+		TEXT("/Game/VFX/GasStove/Audio/S_GasIgnition"));
+	if (IgnitionSndFinder.Succeeded())
+	{
+		IgnitionSound = IgnitionSndFinder.Object;
+	}
+	static ConstructorHelpers::FObjectFinder<USoundBase> CombustionSndFinder(
+		TEXT("/Game/VFX/GasStove/Audio/S_GasCombustion"));
+	if (CombustionSndFinder.Succeeded())
+	{
+		CombustionSound = CombustionSndFinder.Object;
+	}
+	static ConstructorHelpers::FObjectFinder<USoundBase> OffSndFinder(
+		TEXT("/Game/VFX/GasStove/Audio/S_GasOff"));
+	if (OffSndFinder.Succeeded())
+	{
+		OffSound = OffSndFinder.Object;
+	}
+
+	// Teapot cooking defaults (WinterHut teapot-slot system reads these).
+	TeapotActionText = FText::FromString(TEXT("Поставить чайник"));
+	TeapotColdText = FText::FromString(TEXT("Конфорка не горит"));
+	TeapotHeatingText = FText::FromString(TEXT("Чайник греется..."));
+	TeapotTakeBackText = FText::FromString(TEXT("Забрать чайник"));
+	TeapotKeyItem = FName(TEXT("Teapot"));
 }
 
 void AGasStoveBurnerFlame::ApplySpatialization(UAudioComponent* Audio)
@@ -104,8 +145,12 @@ void AGasStoveBurnerFlame::OnConstruction(const FTransform& Transform)
 	Super::OnConstruction(Transform);
 
 	// NOTE: LoadObject, NOT FObjectFinder — finders are illegal outside constructors (fatal error).
-	// No member caching of base materials: stale hard refs block asset replace/delete.
-	UMaterialInterface* FlameBase = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/GasStove/M_GasFlame"));
+	// Member defaults come from the constructor (hard cook references); LoadObject is the fallback.
+	UMaterialInterface* FlameBase = FlameMaterial;
+	if (!FlameBase)
+	{
+		FlameBase = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/GasStove/M_GasFlame"));
+	}
 	if (FlameBase)
 	{
 		FlameMID = UMaterialInstanceDynamic::Create(FlameBase, this);
@@ -113,7 +158,11 @@ void AGasStoveBurnerFlame::OnConstruction(const FTransform& Transform)
 		FlameMID->SetScalarParameterValue(TEXT("FlameIntensity"), FlameIntensity);
 	}
 	// Base glow: own radial material if present, else reuse flame MID.
-	UMaterialInterface* GlowBase = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/GasStove/M_GasGlow"));
+	UMaterialInterface* GlowBase = GlowMaterial;
+	if (!GlowBase)
+	{
+		GlowBase = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/GasStove/M_GasGlow"));
+	}
 	if (GlowBase)
 	{
 		GlowMID = UMaterialInstanceDynamic::Create(GlowBase, this);
@@ -163,12 +212,17 @@ void AGasStoveBurnerFlame::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Auto-bind knob by naming convention (zero setup): this flame's child actor
-	// component "GasStoveBurnerFlame_vN" -> component "SM_FrameCabinStove_Button_vN"
+	// Auto-bind knob + teapot slot by naming convention (zero setup):
+	// this flame's child actor component "GasStoveBurnerFlame_vN" ->
+	//   knob:      component "SM_FrameCabinStove_Button_vN"
+	//   cook slot: component "GasStoveBurnerPlace_vN"
 	// on the parent stove BP. Manual KnobMesh picker wins if set.
+	FString CacName;
+	int32 SufIdx = INDEX_NONE;
+	AActor* Parent = nullptr;
 	if (!KnobMesh)
 	{
-		AActor* Parent = GetAttachParentActor();
+		Parent = GetAttachParentActor();
 		UChildActorComponent* MyCAC = nullptr;
 		if (Parent)
 		{
@@ -184,8 +238,8 @@ void AGasStoveBurnerFlame::BeginPlay()
 		}
 		if (MyCAC && Parent)
 		{
-			const FString CacName = MyCAC->GetName();
-			const int32 SufIdx = CacName.Find(TEXT("_v"), ESearchCase::IgnoreCase, ESearchDir::FromEnd);
+			CacName = MyCAC->GetName();
+			SufIdx = CacName.Find(TEXT("_v"), ESearchCase::IgnoreCase, ESearchDir::FromEnd);
 			if (SufIdx != INDEX_NONE)
 			{
 				const FString KnobName = TEXT("SM_FrameCabinStove_Button") + CacName.Mid(SufIdx);
@@ -255,6 +309,46 @@ void AGasStoveBurnerFlame::BeginPlay()
 			}
 		}
 	}
+
+	// Teapot cooking slot on the matching GasStoveBurnerPlace_vN collision.
+	if (SufIdx != INDEX_NONE && !CacName.IsEmpty() && Parent)
+	{
+		const FString PlaceName = TEXT("GasStoveBurnerPlace") + CacName.Mid(SufIdx);
+		UPrimitiveComponent* PlacePrim = nullptr;
+		TInlineComponentArray<UPrimitiveComponent*> SCSPrims(Parent);
+		for (UPrimitiveComponent* P : SCSPrims)
+		{
+			if (P && P->GetName().Equals(PlaceName, ESearchCase::IgnoreCase))
+			{
+				PlacePrim = P;
+				break;
+			}
+		}
+		if (PlacePrim)
+		{
+			if (UClass* SlotClass = FindObject<UClass>(nullptr, TEXT("/Script/WinterHut.StoveTeapotSlot")))
+			{
+				AActor* Slot = GetWorld()->SpawnActorDeferred<AActor>(
+					SlotClass, PlacePrim->GetComponentTransform(), this,
+					nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (Slot)
+				{
+					Slot->AttachToComponent(PlacePrim, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+					Slot->FinishSpawning(PlacePrim->GetComponentTransform());
+					UE_LOG(LogTemp, Log, TEXT("[GasFlame] teapot slot spawned on %s"),
+						*PlacePrim->GetName());
+				}
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[GasFlame] StoveTeapotSlot class NOT FOUND"));
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[GasFlame] place '%s' NOT found on parent"), *PlaceName);
+		}
+	}
 #endif
 }
 
@@ -283,6 +377,8 @@ void AGasStoveBurnerFlame::BindKnob()
 	KnobPrim = KnobMesh;
 	KnobBaseQuat = KnobMesh->GetRelativeRotation().Quaternion();
 	ComputeKnobAxis();
+	UE_LOG(LogTemp, Log, TEXT("[GasFlame] knob rotate axis (local) = X=%.0f Y=%.0f Z=%.0f"),
+		KnobAxisLocal.X, KnobAxisLocal.Y, KnobAxisLocal.Z);
 }
 
 void AGasStoveBurnerFlame::ComputeKnobAxis()
@@ -454,10 +550,8 @@ void AGasStoveBurnerFlame::Tick(float DeltaSeconds)
 		KnobCurAngle = (KnobTargetAngle > KnobCurAngle)
 			? FMath::Min(KnobCurAngle + Step, KnobTargetAngle)
 			: FMath::Max(KnobCurAngle - Step, KnobTargetAngle);
-		const FVector Axis = (KnobAxis == EKnobAxis::X) ? FVector(1.0f, 0.0f, 0.0f)
-			: (KnobAxis == EKnobAxis::Y) ? FVector(0.0f, 1.0f, 0.0f)
-			: FVector(0.0f, 0.0f, 1.0f);
-		KnobPrim->SetRelativeRotation(KnobBaseQuat * FQuat(Axis, FMath::DegreesToRadians(KnobCurAngle)));
+		// KnobAxisLocal is the hardcoded local shaft axis (Y for this stove).
+		KnobPrim->SetRelativeRotation(KnobBaseQuat * FQuat(KnobAxisLocal, FMath::DegreesToRadians(KnobCurAngle)));
 	}
 
 	if (!bFlameVisual || !bRingBuilt)

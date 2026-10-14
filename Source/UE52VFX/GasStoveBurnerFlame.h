@@ -116,6 +116,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio", meta = (ClampMin = "0", ClampMax = "5"))
 	float IgnitionDelay = 0.7f;
 
+	/** Base flame material. Hard reference: guarantees the cooker includes it in packaged builds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame")
+	TObjectPtr<UMaterialInterface> FlameMaterial;
+
+	/** Base glow material. Hard reference: guarantees the cooker includes it in packaged builds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame")
+	TObjectPtr<UMaterialInterface> GlowMaterial;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio")
 	TObjectPtr<USoundBase> IgnitionSound;
 
@@ -124,6 +132,39 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Audio")
 	TObjectPtr<USoundBase> OffSound;
+
+	/** Teapot cooking tuning (read by the WinterHut teapot-slot system). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Teapot")
+	FText TeapotActionText;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Teapot")
+	FText TeapotColdText;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Teapot")
+	FText TeapotHeatingText;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Teapot")
+	FText TeapotTakeBackText;
+
+	/** Inventory key checked/removed when placing the teapot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Teapot")
+	FName TeapotKeyItem;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Teapot")
+	TSubclassOf<AActor> TeapotEmptyClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Teapot")
+	TSubclassOf<AActor> TeapotReadyClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Teapot")
+	TObjectPtr<USoundBase> TeapotPutSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Teapot")
+	TObjectPtr<USoundBase> WaterBoilingSound;
+
+	/** Seconds of lit burn time to boil. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gas Flame|Teapot", meta = (ClampMin = "1"))
+	float TeapotBoilSeconds = 60.0f;
 
 	const FText& GetActionTextOn() const { return ActionTextOn; }
 	const FText& GetActionTextOff() const { return ActionTextOff; }

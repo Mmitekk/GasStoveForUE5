@@ -122,7 +122,7 @@ AGasStoveBurnerFlame::AGasStoveBurnerFlame()
 	TeapotColdText = FText::FromString(TEXT("Конфорка не горит"));
 	TeapotHeatingText = FText::FromString(TEXT("Чайник греется..."));
 	TeapotTakeBackText = FText::FromString(TEXT("Забрать чайник"));
-	TeapotKeyItem = FName(TEXT("Teapot"));
+	TeapotKeyItem = FName(TEXT("TeaPotEmpty"));
 }
 
 void AGasStoveBurnerFlame::ApplySpatialization(UAudioComponent* Audio)
@@ -185,6 +185,23 @@ void AGasStoveBurnerFlame::OnConstruction(const FTransform& Transform)
 	if (!OffSound)
 	{
 		OffSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/VFX/GasStove/Audio/S_GasOff"));
+	}
+	// Teapot system defaults (WinterHut content; nulls elsewhere are harmless).
+	if (TeapotEmptyClass == nullptr)
+	{
+		TeapotEmptyClass = LoadObject<UClass>(nullptr, TEXT("/Game/WinterHunt/Blueprints/InvetoryItems/TeapotA/BP_TeapotEmpty.BP_TeapotEmpty_C"));
+	}
+	if (TeapotReadyClass == nullptr)
+	{
+		TeapotReadyClass = LoadObject<UClass>(nullptr, TEXT("/Game/WinterHunt/Blueprints/InvetoryItems/TeapotA/BP_TeapotRedy.BP_TeapotRedy_C"));
+	}
+	if (!TeapotPutSound)
+	{
+		TeapotPutSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/WinterHunt/Sound/Items/Teapot_Put_1_Cue"));
+	}
+	if (!WaterBoilingSound)
+	{
+		WaterBoilingSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/WinterHunt/Sound/Items/Water_Boiling_Cue"));
 	}
 	// Spatial attenuation asset (created by Python/make_gas_attenuation.py).
 	if (USoundAttenuation* ATN = LoadObject<USoundAttenuation>(nullptr, TEXT("/Game/VFX/GasStove/ATN_GasStove")))
